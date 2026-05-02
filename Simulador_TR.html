@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Trajectòria de Voleibol</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 280px 1fr 280px;
+            grid-template-rows: auto auto;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .left-column { grid-row: 1 / 3; }
+        .right-column { grid-row: 1 / 3; }
+        .center-top { grid-column: 2; grid-row: 1; }
+        .center-bottom {
+            grid-column: 2;
+            grid-row: 2;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .panel {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .panel h3 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        .field-group { margin-bottom: 15px; }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+            font-size: 14px;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .constants {
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        .constants div { margin: 5px 0; }
+        canvas {
+            width: 100%;
+            height: 350px;
+            background: #f0f8ff;
+            border-radius: 10px;
+            border: 2px solid #667eea;
+        }
+        .view-label {
+            text-align: center;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 14px;
+            background: white;
+            padding: 8px;
+            border-radius: 5px;
+        }
+        .air-toggle, .mode-selector {
+            margin-top: 15px;
+            text-align: center;
+        }
+        .mode-button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            font-size: 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 0 5px;
+        }
+        .mode-button.active {
+            background: #667eea;
+            transform: scale(1.1);
+        }
+        .toggle-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .toggle-button.off { background: #f44336; }
+        .toggle-button:hover, .mode-button:hover {
+            transform: translateY(-2px);
+        }
+        .result-item {
+            margin: 10px 0;
+            padding: 8px;
+            background: #f5f5f5;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .result-label {
+            font-weight: bold;
+            color: #667eea;
+        }
+        .warning { color: #f44336; font-weight: bold; }
+        .success { color: #4CAF50; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="left-column">
+            <div class="panel">
+                <h3>Constants</h3>
+                <div class="constants">
+                    <div><strong>g</strong> = 9.81 m/s²</div>
+                    <div><strong>m</strong> = 0.27 kg</div>
+                    <div><strong>r</strong> = 0.105 m</div>
+                    <div><strong>t₁</strong> = 0.15 s</div>
+                    <div id="airConstants">
+                        <div><strong>ρ</strong> = 1.2 kg/m³</div>
+                        <div><strong>μ</strong> = 1.8×10⁻⁵ Pa·s</div>
+                        <div><strong>C_d</strong> = 0.47</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel" style="margin-top: 20px;">
+                <h3>Variables d'Entrada</h3>
+                <div class="field-group">
+                    <label>Alçada inicial h₀ (m)</label>
+                    <input type="number" id="h0" value="2.5" step="0.1" min="0">
+                </div>
+                <div class="field-group">
+                    <label>Força F (N)</label>
+                    <input type="number" id="force" value="40" step="1" min="0">
+                </div>
+                <div class="field-group">
+                    <label>Angle α (°)</label>
+                    <input type="number" id="angle" value="5" step="1" min="0" max="90">
+                </div>
+                <div class="field-group" id="windControls" style="display: none;">
+                    <label>Velocitat del vent (m/s)</label>
+                    <input type="number" id="windSpeed" value="3" step="0.5" min="0" max="15">
+                </div>
+                <div class="field-group" id="windDirectionControl" style="display: none;">
+                    <label>Direcció del vent (°)</label>
+                    <input type="number" id="windDirection" value="0" step="15" min="-180" max="180">
+                    <small style="color: #666;">0°=a favor, 180°=en contra, ±90°=lateral</small>
+                </div>
+            </div>
+            
+            <div class="mode-selector">
+                <button class="mode-button active" id="modeIndoor" onclick="setMode('indoor')">
+                    🏐 Pista
+                </button>
+                <button class="mode-button" id="modeBeach" onclick="setMode('beach')">
+                    🏖️ Platja
+                </button>
+            </div>
+            
+            <div class="air-toggle">
+                <button class="toggle-button" id="airToggle" onclick="toggleAir()">
+                    Aire: SÍ
+                </button>
+            </div>
+        </div>
+        
+        <div class="center-top">
+            <div class="view-label">Vista Lateral (Alçat)</div>
+            <canvas id="canvasSide"></canvas>
+        </div>
+        
+        <div class="center-bottom">
+            <div>
+                <div class="view-label">Vista des de la Línia de Servei</div>
+                <canvas id="canvasPlayer"></canvas>
+            </div>
+            <div>
+                <div class="view-label">Vista Zenital (Planta)</div>
+                <canvas id="canvasTop"></canvas>
+            </div>
+        </div>
+        
+        <div class="right-column">
+            <div class="panel">
+                <h3>Resultats</h3>
+                <div id="results"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let airEnabled = true;
+        let currentMode = 'indoor';
+        const canvasSide = document.getElementById('canvasSide');
+        const ctxSide = canvasSide.getContext('2d');
+        const canvasPlayer = document.getElementById('canvasPlayer');
+        const ctxPlayer = canvasPlayer.getContext('2d');
+        const canvasTop = document.getElementById('canvasTop');
+        const ctxTop = canvasTop.getContext('2d');
+        
+        const ballImg = new Image();
+        ballImg.src = 'data:image/svg+xml;base64,' + btoa(`
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+                <defs>
+                    <radialGradient id="shine" cx="40%" cy="40%">
+                        <stop offset="0%" style="stop-color:white;stop-opacity:0.4"/>
+                        <stop offset="100%" style="stop-color:white;stop-opacity:0"/>
+                    </radialGradient>
+                </defs>
+                <circle cx="100" cy="100" r="95" fill="white"/>
+                <path d="M100,5 A95,95 0,0,1 170,60 L100,100 Z" fill="#E53935"/>
+                <path d="M170,60 A95,95 0,0,1 170,140 L100,100 Z" fill="#4CAF50"/>
+                <path d="M170,140 A95,95 0,0,1 100,195 L100,100 Z" fill="#E53935"/>
+                <path d="M100,195 A95,95 0,0,1 30,140 L100,100 Z" fill="#4CAF50"/>
+                <path d="M30,140 A95,95 0,0,1 30,60 L100,100 Z" fill="#E53935"/>
+                <path d="M30,60 A95,95 0,0,1 100,5 L100,100 Z" fill="#4CAF50"/>
+                <circle cx="100" cy="100" r="95" fill="url(#shine)"/>
+            </svg>
+        `);
+        
+        const beachBallImg = new Image();
+        beachBallImg.src = 'data:image/svg+xml;base64,' + btoa(`
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+                <defs>
+                    <radialGradient id="shine2" cx="40%" cy="40%">
+                        <stop offset="0%" style="stop-color:white;stop-opacity:0.5"/>
+                        <stop offset="100%" style="stop-color:white;stop-opacity:0"/>
+                    </radialGradient>
+                </defs>
+                <circle cx="100" cy="100" r="95" fill="#FFE082"/>
+                <path d="M 100,5 A 95,95 0 0,1 155,35 Q 120,60 100,100 Z" fill="#2196F3"/>
+                <path d="M 155,35 A 95,95 0 0,1 175,90 Q 130,90 100,100 Z" fill="#FFEB3B"/>
+                <path d="M 175,90 A 95,95 0 0,1 165,145 Q 130,115 100,100 Z" fill="#2196F3"/>
+                <path d="M 165,145 A 95,95 0 0,1 110,185 Q 100,135 100,100 Z" fill="#FFEB3B"/>
+                <path d="M 110,185 A 95,95 0 0,1 45,165 Q 70,130 100,100 Z" fill="#2196F3"/>
+                <path d="M 45,165 A 95,95 0 0,1 25,110 Q 60,100 100,100 Z" fill="#FFEB3B"/>
+                <path d="M 25,110 A 95,95 0 0,1 35,55 Q 70,75 100,100 Z" fill="#2196F3"/>
+                <path d="M 35,55 A 95,95 0 0,1 100,5 Q 100,55 100,100 Z" fill="#FFEB3B"/>
+                <circle cx="100" cy="100" r="95" fill="url(#shine2)"/>
+            </svg>
+        `);
+        
+        const g = 9.81, m = 0.27, r = 0.105, ta = 0.15;
+        
+        const modeConfig = {
+            indoor: {
+                courtLength: 18,
+                courtWidth: 9,
+                netHeight: 2.43,
+                colors: {
+                    background: '#1a2332',
+                    court: '#FF8A65',
+                    freeZone: '#1976D2',
+                    outZone: '#0D47A1'
+                }
+            },
+            beach: {
+                courtLength: 16,
+                courtWidth: 8,
+                netHeight: 2.43,
+                colors: {
+                    background: '#87CEEB',
+                    court: '#F4D03F',
+                    freeZone: '#E8C468',
+                    outZone: '#D4A76A'
+                }
+            }
+        };
+        
+        function getAirConstants() {
+            return airEnabled ? { rho: 1.2, mu: 1.8e-5, Cd: 0.47 } : { rho: 0, mu: 0, Cd: 0 };
+        }
+        
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('modeIndoor').classList.toggle('active', mode === 'indoor');
+            document.getElementById('modeBeach').classList.toggle('active', mode === 'beach');
+            
+            document.getElementById('windControls').style.display = mode === 'beach' ? 'block' : 'none';
+            document.getElementById('windDirectionControl').style.display = mode === 'beach' ? 'block' : 'none';
+            
+            calculate();
+        }
+        
+        function toggleAir() {
+            airEnabled = !airEnabled;
+            const btn = document.getElementById('airToggle');
+            const airConsts = document.getElementById('airConstants');
+            
+            if (airEnabled) {
+                btn.textContent = 'Aire: SÍ';
+                btn.classList.remove('off');
+                airConsts.style.opacity = '1';
+            } else {
+                btn.textContent = 'Aire: NO';
+                btn.classList.add('off');
+                airConsts.style.opacity = '0.3';
+            }
+            calculate();
+        }
+        
+        function calculate() {
+            const h0 = parseFloat(document.getElementById('h0').value) || 0;
+            const F = parseFloat(document.getElementById('force').value) || 0;
+            const alpha = parseFloat(document.getElementById('angle').value) || 0;
+            
+            let windSpeed = 0, windVx = 0, windVz = 0;
+            if (currentMode === 'beach') {
+                windSpeed = parseFloat(document.getElementById('windSpeed').value) || 0;
+                const windDirection = parseFloat(document.getElementById('windDirection').value) || 0;
+                const windAngleRad = windDirection * Math.PI / 180;
+                windVx = windSpeed * Math.cos(windAngleRad);
+                windVz = windSpeed * Math.sin(windAngleRad);
+            }
+            
+            const config = modeConfig[currentMode];
+            const alphaRad = alpha * Math.PI / 180;
+            const v0 = (F * ta) / m;
+            const v0x = v0 * Math.cos(alphaRad);
+            const v0y = v0 * Math.sin(alphaRad);
+            
+            const air = getAirConstants();
+            const A = Math.PI * r * r;
+            
+            const dt = 0.01;
+            let t = 0, x = 0, y = h0, z = 0;
+            let vx = v0x, vy = v0y, vz = 0;
+            
+            const trajectory = [{x: 0, y: h0, z: 0}];
+            let heightAtNet = null, xf = 0, tf = 0, vxf = v0x, vyf = v0y;
+            
+            // NUEVO: Variable para calcular z_max
+            let z_max = 0;
+            
+            const floatAmp = airEnabled ? 0.8 : 0;
+            const floatFreq = 2.2;
+            const vertFloatAmp = airEnabled ? 0.4 : 0;
+            const randFactor = Math.random() * 0.5 + 0.75;
+            
+            while (y >= 0 && x <= 20 && t < 10) {
+                const vRelX = vx - windVx, vRelY = vy, vRelZ = vz - windVz;
+                const vRel = Math.sqrt(vRelX*vRelX + vRelY*vRelY + vRelZ*vRelZ);
+                const Fd = 0.5 * air.rho * air.Cd * A * vRel * vRel;
+                
+                let ax = -Fd * vRelX / (m * vRel || 1);
+                let ay = -g - Fd * vRelY / (m * vRel || 1);
+                let az = -Fd * vRelZ / (m * vRel || 1);
+                
+                if (airEnabled && vRel > 3) {
+                    const fZ = Math.sin(t * floatFreq * 2 * Math.PI + randFactor) * Math.exp(-t * 0.15);
+                    const fY = Math.cos(t * floatFreq * 1.3 * 2 * Math.PI) * Math.exp(-t * 0.2);
+                    const iZ = Math.sin(t * floatFreq * 3.7 * 2 * Math.PI) * 0.3;
+                    const iY = Math.cos(t * floatFreq * 4.1 * 2 * Math.PI) * 0.2;
+                    
+                    vz += (fZ + iZ) * floatAmp * vRel * 0.5 * dt;
+                    vy += (fY + iY) * vertFloatAmp * vRel * 0.4 * dt;
+                }
+                
+                vx += ax * dt; vy += ay * dt; vz += az * dt;
+                x += vx * dt; y += vy * dt; z += vz * dt;
+                t += dt;
+                
+                // NUEVO: Actualizar z_max
+                if (Math.abs(z) > z_max) {
+                    z_max = Math.abs(z);
+                }
+                
+                const netPos = config.courtLength / 2;
+                if (x >= netPos && heightAtNet === null) heightAtNet = y;
+                
+                trajectory.push({x, y, z});
+                
+                if (y >= 0) {
+                    xf = x; tf = t; vxf = vx; vyf = vy;
+                }
+            }
+            
+            const vf = Math.sqrt(vxf*vxf + vyf*vyf);
+            const vmedia = xf / tf;
+            const vProm = (v0 + vf) / 2;
+            const Fd_avg = 0.5 * air.rho * air.Cd * A * vProm * vProm;
+            const Re = airEnabled ? (air.rho * vProm * 2 * r) / air.mu : 0;
+            
+            let flowType = '';
+            if (airEnabled) {
+                if (Re < 2000) flowType = 'Laminar';
+                else if (Re > 4000) flowType = 'Turbulent';
+                else flowType = 'Transició';
+            } else flowType = 'N/A (sense aire)';
+            
+            const netPos = config.courtLength / 2;
+            const netPass = heightAtNet !== null && heightAtNet > config.netHeight;
+            const inBounds = xf <= config.courtLength && xf > netPos;
+            
+            let windInfo = '';
+            if (currentMode === 'beach' && windSpeed > 0) {
+                const windDir = parseFloat(document.getElementById('windDirection').value) || 0;
+                windInfo = `<div class="result-item">
+                    <span class="result-label">🌬️ Vent:</span> ${windSpeed.toFixed(1)} m/s
+                    <br><small>${getWindDesc(windDir)}</small>
+                </div>`;
+            }
+            
+            document.getElementById('results').innerHTML = `
+                <div class="result-item">
+                    <span class="result-label">Mode:</span> ${currentMode === 'indoor' ? '🏐 Pista' : '🏖️ Platja'}
+                </div>
+                ${windInfo}
+                <div class="result-item"><span class="result-label">v₀:</span> ${v0.toFixed(2)} m/s</div>
+                <div class="result-item"><span class="result-label">v̄:</span> ${vmedia.toFixed(2)} m/s</div>
+                <div class="result-item"><span class="result-label">vf:</span> ${vf.toFixed(2)} m/s</div>
+                <div class="result-item">
+                    <span class="result-label">xf:</span> ${xf.toFixed(2)} m
+                    <br><span class="${inBounds ? 'success' : 'warning'}">
+                        ${xf <= config.courtLength ? (xf > netPos ? '✓ Cau al camp contrari' : '✗ No passa la xarxa') : '✗ Fora del camp'}
+                    </span>
+                </div>
+                <div class="result-item"><span class="result-label">tv:</span> ${tf.toFixed(2)} s</div>
+                <div class="result-item"><span class="result-label">Fₐ:</span> ${Fd_avg.toFixed(4)} N</div>
+                <div class="result-item">
+                    <span class="result-label">Reynolds:</span> ${Re.toFixed(0)}
+                    <br><span style="font-size: 12px;">${flowType}</span>
+                </div>
+                <div class="result-item">
+                    <span class="result-label">Alçada a la xarxa:</span> ${heightAtNet ? heightAtNet.toFixed(2) + ' m' : 'N/A'}
+                    <br><span class="${netPass ? 'success' : 'warning'}">
+                        ${heightAtNet ? (netPass ? '✓ Passa la xarxa' : '✗ No passa la xarxa') : ''}
+                    </span>
+                </div>
+                <div class="result-item" style="background: #fff3e0; border-left: 4px solid #ff9800;">
+                    <span class="result-label">Desv. lateral:</span> ${z_max.toFixed(2)} m
+                </div>
+            `;
+            
+            drawFieldSide(trajectory, config);
+            drawFieldPlayer(trajectory, config);
+            drawFieldTopView(trajectory, config);
+        }
+        
+        function getWindDesc(angle) {
+            if (angle >= -22.5 && angle <= 22.5) return 'A favor (cua)';
+            if (angle >= 22.5 && angle <= 67.5) return 'Diagonal a favor (dreta)';
+            if (angle >= 67.5 && angle <= 112.5) return 'Lateral (dreta)';
+            if (angle >= 112.5 && angle <= 157.5) return 'Diagonal en contra (dreta)';
+            if (angle >= 157.5 || angle <= -157.5) return 'En contra (cara)';
+            if (angle >= -157.5 && angle <= -112.5) return 'Diagonal en contra (esquerra)';
+            if (angle >= -112.5 && angle <= -67.5) return 'Lateral (esquerra)';
+            if (angle >= -67.5 && angle <= -22.5) return 'Diagonal a favor (esquerra)';
+            return '';
+        }
+        
+        function drawFieldSide(traj, cfg) {
+            canvasSide.width = canvasSide.offsetWidth;
+            canvasSide.height = canvasSide.offsetHeight;
+            
+            const w = canvasSide.width, h = canvasSide.height;
+            const m = 50, scX = (w - m * 2) / 20, scY = (h - 100) / 6, gY = h - 60;
+            
+            ctxSide.clearRect(0, 0, w, h);
+            
+            if (currentMode === 'indoor') {
+                const bg = ctxSide.createLinearGradient(0, 0, 0, gY);
+                bg.addColorStop(0, '#1a2332');
+                bg.addColorStop(0.5, '#263547');
+                bg.addColorStop(1, '#37474F');
+                ctxSide.fillStyle = bg;
+                ctxSide.fillRect(0, 0, w, gY);
+                
+                for (let i = 0; i < 8; i++) {
+                    const lx = m + (i * (w - m * 2) / 7), ly = 20 + Math.random() * 10;
+                    const lg = ctxSide.createRadialGradient(lx, ly, 0, lx, ly, 30);
+                    lg.addColorStop(0, 'rgba(255,255,255,0.8)');
+                    lg.addColorStop(0.3, 'rgba(255,255,255,0.3)');
+                    lg.addColorStop(1, 'rgba(255,255,255,0)');
+                    ctxSide.fillStyle = lg;
+                    ctxSide.fillRect(lx - 30, ly - 30, 60, 60);
+                    ctxSide.fillStyle = '#FFF';
+                    ctxSide.beginPath();
+                    ctxSide.arc(lx, ly, 4, 0, 2 * Math.PI);
+                    ctxSide.fill();
+                }
+            } else {
+                const sky = ctxSide.createLinearGradient(0, 0, 0, gY);
+                sky.addColorStop(0, '#87CEEB');
+                sky.addColorStop(0.7, '#B0E0E6');
+                sky.addColorStop(1, '#E0F6FF');
+                ctxSide.fillStyle = sky;
+                ctxSide.fillRect(0, 0, w, gY);
+                
+                ctxSide.fillStyle = '#FFEB3B';
+                ctxSide.beginPath();
+                ctxSide.arc(w - 80, 40, 25, 0, 2 * Math.PI);
+                ctxSide.fill();
+            }
+            
+            if (currentMode === 'beach') {
+                ctxSide.fillStyle = '#E8C468';
+            } else {
+                ctxSide.fillStyle = '#1976D2';
+            }
+            ctxSide.fillRect(0, gY, w, h - gY);
+            
+            ctxSide.fillStyle = cfg.colors.freeZone;
+            ctxSide.fillRect(m - 20, gY, w - m * 2 + 40, 40);
+            
+            const fStart = m, fEnd = m + cfg.courtLength * scX;
+            ctxSide.fillStyle = cfg.colors.court;
+            ctxSide.fillRect(fStart, gY - 2, fEnd - fStart, 42);
+            
+            ctxSide.strokeStyle = '#FFF';
+            ctxSide.lineWidth = 3;
+            ctxSide.beginPath();
+            ctxSide.moveTo(fStart, gY - 5);
+            ctxSide.lineTo(fStart, gY + 40);
+            ctxSide.stroke();
+            ctxSide.beginPath();
+            ctxSide.moveTo(fEnd, gY - 5);
+            ctxSide.lineTo(fEnd, gY + 40);
+            ctxSide.stroke();
+            
+            const cX = m + (cfg.courtLength / 2) * scX;
+            ctxSide.lineWidth = 4;
+            ctxSide.beginPath();
+            ctxSide.moveTo(cX, gY - 5);
+            ctxSide.lineTo(cX, gY + 40);
+            ctxSide.stroke();
+            
+            if (currentMode === 'indoor') {
+                ctxSide.lineWidth = 2;
+                ctxSide.setLineDash([8, 8]);
+                const a1X = m + (cfg.courtLength / 2 - 3) * scX;
+                ctxSide.beginPath();
+                ctxSide.moveTo(a1X, gY - 5);
+                ctxSide.lineTo(a1X, gY + 40);
+                ctxSide.stroke();
+                const a2X = m + (cfg.courtLength / 2 + 3) * scX;
+                ctxSide.beginPath();
+                ctxSide.moveTo(a2X, gY - 5);
+                ctxSide.lineTo(a2X, gY + 40);
+                ctxSide.stroke();
+                ctxSide.setLineDash([]);
+            }
+            
+            const nX = m + (cfg.courtLength / 2) * scX;
+            const nH = cfg.netHeight * scY;
+            
+            ctxSide.fillStyle = '#212121';
+            ctxSide.fillRect(nX - 4, gY - nH - 15, 8, nH + 15);
+            ctxSide.fillStyle = '#FFF';
+            ctxSide.fillRect(nX - 2, gY - nH - 25, 4, 10);
+            
+            ctxSide.strokeStyle = 'rgba(33,33,33,0.8)';
+            ctxSide.lineWidth = 6;
+            ctxSide.beginPath();
+            ctxSide.moveTo(nX, gY);
+            ctxSide.lineTo(nX, gY - nH);
+            ctxSide.stroke();
+            
+            ctxSide.strokeStyle = '#FFF';
+            ctxSide.lineWidth = 3;
+            ctxSide.beginPath();
+            ctxSide.moveTo(nX - 15, gY - nH);
+            ctxSide.lineTo(nX + 15, gY - nH);
+            ctxSide.stroke();
+            
+            ctxSide.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctxSide.lineWidth = 1;
+            ctxSide.setLineDash([3, 3]);
+            ctxSide.beginPath();
+            ctxSide.moveTo(m, gY - nH);
+            ctxSide.lineTo(w - m, gY - nH);
+            ctxSide.stroke();
+            ctxSide.setLineDash([]);
+            
+            ctxSide.fillStyle = '#FFF';
+            ctxSide.font = 'bold 11px Arial';
+            ctxSide.fillText(cfg.netHeight + 'm', nX + 20, gY - nH + 5);
+            
+            ctxSide.strokeStyle = 'rgba(0,0,0,0.15)';
+            ctxSide.lineWidth = 2;
+            ctxSide.beginPath();
+            traj.forEach((p, i) => {
+                const px = m + p.x * scX;
+                if (i === 0) ctxSide.moveTo(px, gY);
+                else ctxSide.lineTo(px, gY);
+            });
+            ctxSide.stroke();
+            
+            const tg = ctxSide.createLinearGradient(m, 0, w - m, 0);
+            tg.addColorStop(0, '#FF4500');
+            tg.addColorStop(0.5, '#FF6347');
+            tg.addColorStop(1, '#FF8C00');
+            ctxSide.strokeStyle = tg;
+            ctxSide.lineWidth = 4;
+            ctxSide.shadowColor = 'rgba(255,69,0,0.4)';
+            ctxSide.shadowBlur = 10;
+            ctxSide.beginPath();
+            traj.forEach((p, i) => {
+                const px = m + p.x * scX, py = gY - p.y * scY;
+                if (i === 0) ctxSide.moveTo(px, py);
+                else ctxSide.lineTo(px, py);
+            });
+            ctxSide.stroke();
+            ctxSide.shadowBlur = 0;
+            
+            const iX = m, iY = gY - traj[0].y * scY, bR = 11;
+            const currentBall = currentMode === 'beach' ? beachBallImg : ballImg;
+            ctxSide.save();
+            ctxSide.beginPath();
+            ctxSide.arc(iX, iY, bR, 0, 2 * Math.PI);
+            ctxSide.clip();
+            ctxSide.drawImage(currentBall, iX - bR, iY - bR, bR * 2, bR * 2);
+            ctxSide.restore();
+            
+            ctxSide.fillStyle = 'rgba(0,0,0,0.25)';
+            ctxSide.beginPath();
+            ctxSide.ellipse(iX, gY, bR * 0.7, bR * 0.25, 0, 0, 2 * Math.PI);
+            ctxSide.fill();
+            
+            if (traj.length > 1) {
+                const last = traj[traj.length - 1];
+                const fX = m + last.x * scX, fY = gY - last.y * scY;
+                ctxSide.save();
+                ctxSide.beginPath();
+                ctxSide.arc(fX, fY, bR, 0, 2 * Math.PI);
+                ctxSide.clip();
+                ctxSide.drawImage(currentBall, fX - bR, fY - bR, bR * 2, bR * 2);
+                ctxSide.restore();
+                ctxSide.fillStyle = 'rgba(0,0,0,0.25)';
+                ctxSide.beginPath();
+                ctxSide.ellipse(fX, gY, bR * 0.7, bR * 0.25, 0, 0, 2 * Math.PI);
+                ctxSide.fill();
+            }
+            
+            ctxSide.fillStyle = '#FFF';
+            ctxSide.font = 'bold 12px Arial';
+            ctxSide.fillText('0m', m + 5, gY + 55);
+            ctxSide.fillText((cfg.courtLength / 2) + 'm', cX - 10, gY + 55);
+            ctxSide.fillText(cfg.courtLength + 'm', fEnd - 20, gY + 55);
+        }
+        
+        function drawFieldPlayer(traj, cfg) {
+            canvasPlayer.width = canvasPlayer.offsetWidth;
+            canvasPlayer.height = canvasPlayer.offsetHeight;
+            
+            const w = canvasPlayer.width, h = canvasPlayer.height;
+            const hY = h * 0.25, gY = h - 30;
+            
+            ctxPlayer.clearRect(0, 0, w, h);
+            
+            if (currentMode === 'indoor') {
+                const bg = ctxPlayer.createLinearGradient(0, 0, 0, hY);
+                bg.addColorStop(0, '#0d1419');
+                bg.addColorStop(0.6, '#1a2332');
+                bg.addColorStop(1, '#263547');
+                ctxPlayer.fillStyle = bg;
+                ctxPlayer.fillRect(0, 0, w, h);
+                
+                const lights = [{x: w * 0.2, y: 15}, {x: w * 0.35, y: 20}, {x: w * 0.5, y: 15}, {x: w * 0.65, y: 20}, {x: w * 0.8, y: 15}];
+                lights.forEach(l => {
+                    const lg = ctxPlayer.createRadialGradient(l.x, l.y, 0, l.x, l.y, 40);
+                    lg.addColorStop(0, 'rgba(255,255,255,0.9)');
+                    lg.addColorStop(0.2, 'rgba(255,255,255,0.4)');
+                    lg.addColorStop(1, 'rgba(255,255,255,0)');
+                    ctxPlayer.fillStyle = lg;
+                    ctxPlayer.fillRect(l.x - 40, l.y - 40, 80, 80);
+                    ctxPlayer.fillStyle = '#FFF';
+                    ctxPlayer.beginPath();
+                    ctxPlayer.arc(l.x, l.y, 5, 0, 2 * Math.PI);
+                    ctxPlayer.fill();
+                });
+            } else {
+                const sky = ctxPlayer.createLinearGradient(0, 0, 0, hY);
+                sky.addColorStop(0, '#87CEEB');
+                sky.addColorStop(0.5, '#B0E0E6');
+                sky.addColorStop(1, '#E0F6FF');
+                ctxPlayer.fillStyle = sky;
+                ctxPlayer.fillRect(0, 0, w, h);
+                
+                const sg = ctxPlayer.createRadialGradient(w - 80, 50, 0, w - 80, 50, 35);
+                sg.addColorStop(0, '#FFF59D');
+                sg.addColorStop(0.5, '#FFEB3B');
+                sg.addColorStop(1, 'rgba(255,235,59,0)');
+                ctxPlayer.fillStyle = sg;
+                ctxPlayer.beginPath();
+                ctxPlayer.arc(w - 80, 50, 35, 0, 2 * Math.PI);
+                ctxPlayer.fill();
+                ctxPlayer.fillStyle = '#FFEB3B';
+                ctxPlayer.beginPath();
+                ctxPlayer.arc(w - 80, 50, 20, 0, 2 * Math.PI);
+                ctxPlayer.fill();
+                
+                function drawCloud(x, y, sz) {
+                    ctxPlayer.fillStyle = 'rgba(255,255,255,0.7)';
+                    ctxPlayer.beginPath();
+                    ctxPlayer.arc(x, y, sz * 0.5, 0, 2 * Math.PI);
+                    ctxPlayer.arc(x + sz * 0.4, y, sz * 0.4, 0, 2 * Math.PI);
+                    ctxPlayer.arc(x - sz * 0.4, y, sz * 0.4, 0, 2 * Math.PI);
+                    ctxPlayer.arc(x, y - sz * 0.3, sz * 0.4, 0, 2 * Math.PI);
+                    ctxPlayer.fill();
+                }
+                drawCloud(w * 0.2, 40, 40);
+                drawCloud(w * 0.6, 60, 50);
+            }
+            
+            function proj(x, y, z) {
+                const fov = 450, cZ = -3, cY = 1.7;
+                const sc = fov / (fov + z - cZ);
+                return {
+                    x: w / 2 + x * sc * 28,
+                    y: hY + (gY - hY) * 0.85 - (y - cY) * sc * 28,
+                    scale: sc
+                };
+            }
+            
+            if (currentMode === 'beach') {
+                ctxPlayer.fillStyle = '#E8C468';
+                ctxPlayer.fillRect(0, hY, w, h - hY);
+            } else {
+                ctxPlayer.fillStyle = '#0D47A1';
+                ctxPlayer.fillRect(0, hY, w, h - hY);
+            }
+            
+            ctxPlayer.fillStyle = cfg.colors.freeZone;
+            const fzc = [proj(-6, 0, -1), proj(6, 0, -1), proj(6, 0, 20), proj(-6, 0, 20)];
+            ctxPlayer.beginPath();
+            ctxPlayer.moveTo(fzc[0].x, fzc[0].y);
+            fzc.forEach(c => ctxPlayer.lineTo(c.x, c.y));
+            ctxPlayer.closePath();
+            ctxPlayer.fill();
+            
+            ctxPlayer.fillStyle = cfg.colors.court;
+            const hw = cfg.courtWidth / 2;
+            const fc = [proj(-hw, 0, 0), proj(hw, 0, 0), proj(hw, 0, cfg.courtLength), proj(-hw, 0, cfg.courtLength)];
+            ctxPlayer.beginPath();
+            ctxPlayer.moveTo(fc[0].x, fc[0].y);
+            fc.forEach(c => ctxPlayer.lineTo(c.x, c.y));
+            ctxPlayer.closePath();
+            ctxPlayer.fill();
+            
+            ctxPlayer.strokeStyle = '#FFF';
+            ctxPlayer.lineWidth = 4;
+            ctxPlayer.beginPath();
+            ctxPlayer.moveTo(fc[0].x, fc[0].y);
+            fc.forEach(c => ctxPlayer.lineTo(c.x, c.y));
+            ctxPlayer.closePath();
+            ctxPlayer.stroke();
+            
+            const nP = cfg.courtLength / 2;
+            const cL = proj(-hw, 0, nP), cR = proj(hw, 0, nP);
+            ctxPlayer.strokeStyle = '#FFF';
+            ctxPlayer.lineWidth = 5;
+            ctxPlayer.beginPath();
+            ctxPlayer.moveTo(cL.x, cL.y);
+            ctxPlayer.lineTo(cR.x, cR.y);
+            ctxPlayer.stroke();
+            
+            if (currentMode === 'indoor') {
+                ctxPlayer.lineWidth = 3;
+                ctxPlayer.setLineDash([8, 8]);
+                const a1L = proj(-hw, 0, nP - 3), a1R = proj(hw, 0, nP - 3);
+                ctxPlayer.beginPath();
+                ctxPlayer.moveTo(a1L.x, a1L.y);
+                ctxPlayer.lineTo(a1R.x, a1R.y);
+                ctxPlayer.stroke();
+                const a2L = proj(-hw, 0, nP + 3), a2R = proj(hw, 0, nP + 3);
+                ctxPlayer.beginPath();
+                ctxPlayer.moveTo(a2L.x, a2L.y);
+                ctxPlayer.lineTo(a2R.x, a2R.y);
+                ctxPlayer.stroke();
+                ctxPlayer.setLineDash([]);
+            }
+            
+            const nZ = nP, nHT = cfg.netHeight, nHB = 1.0;
+            const pL = proj(-hw, 0, nZ), pTL = proj(-hw, nHT + 0.12, nZ);
+            const pR = proj(hw, 0, nZ), pTR = proj(hw, nHT + 0.12, nZ);
+            
+            ctxPlayer.fillStyle = '#212121';
+            const pW = 5;
+            ctxPlayer.fillRect(pL.x - pW/2, pTL.y, pW, pL.y - pTL.y);
+            ctxPlayer.fillRect(pR.x - pW/2, pTR.y, pW, pR.y - pTR.y);
+            
+            ctxPlayer.fillStyle = '#FFF';
+            ctxPlayer.fillRect(pL.x - 2, pTL.y - 15, 4, 12);
+            ctxPlayer.fillRect(pR.x - 2, pTR.y - 15, 4, 12);
+            
+            const nL = proj(-hw, nHB, nZ), nR = proj(hw, nHB, nZ);
+            const nTL = proj(-hw, nHT, nZ), nTR = proj(hw, nHT, nZ);
+            
+            ctxPlayer.fillStyle = 'rgba(33,33,33,0.75)';
+            ctxPlayer.beginPath();
+            ctxPlayer.moveTo(nTL.x, nTL.y);
+            ctxPlayer.lineTo(nTR.x, nTR.y);
+            ctxPlayer.lineTo(nR.x, nR.y);
+            ctxPlayer.lineTo(nL.x, nL.y);
+            ctxPlayer.closePath();
+            ctxPlayer.fill();
+            
+            ctxPlayer.strokeStyle = 'rgba(120,120,120,0.6)';
+            ctxPlayer.lineWidth = 0.8;
+            const nVH = nHT - nHB;
+            for (let i = 0; i <= 8; i++) {
+                const r = i / 8, y = nHB + nVH * r;
+                const pL = proj(-hw, y, nZ), pR = proj(hw, y, nZ);
+                ctxPlayer.beginPath();
+                ctxPlayer.moveTo(pL.x, pL.y);
+                ctxPlayer.lineTo(pR.x, pR.y);
+                ctxPlayer.stroke();
+            }
+            for (let i = 0; i <= 12; i++) {
+                const r = i / 12, xP = -hw + cfg.courtWidth * r;
+                const pB = proj(xP, nHB, nZ), pT = proj(xP, nHT, nZ);
+                ctxPlayer.beginPath();
+                ctxPlayer.moveTo(pB.x, pB.y);
+                ctxPlayer.lineTo(pT.x, pT.y);
+                ctxPlayer.stroke();
+            }
+            
+            ctxPlayer.strokeStyle = '#FFF';
+            ctxPlayer.lineWidth = 3;
+            ctxPlayer.beginPath();
+            ctxPlayer.moveTo(nTL.x, nTL.y);
+            ctxPlayer.lineTo(nTR.x, nTR.y);
+            ctxPlayer.stroke();
+            
+            ctxPlayer.strokeStyle = 'rgba(0,0,0,0.15)';
+            ctxPlayer.lineWidth = 3;
+            ctxPlayer.beginPath();
+            traj.forEach((p, i) => {
+                const pt = proj(p.z, 0, p.x);
+                if (i === 0) ctxPlayer.moveTo(pt.x, pt.y);
+                else ctxPlayer.lineTo(pt.x, pt.y);
+            });
+            ctxPlayer.stroke();
+            
+            const tg = ctxPlayer.createLinearGradient(0, 0, w, 0);
+            tg.addColorStop(0, '#FF4500');
+            tg.addColorStop(0.5, '#FF6347');
+            tg.addColorStop(1, '#FF8C00');
+            ctxPlayer.strokeStyle = tg;
+            ctxPlayer.lineWidth = 4;
+            ctxPlayer.shadowColor = 'rgba(255,69,0,0.5)';
+            ctxPlayer.shadowBlur = 10;
+            ctxPlayer.beginPath();
+            traj.forEach((p, i) => {
+                const pt = proj(p.z, p.y, p.x);
+                if (i === 0) ctxPlayer.moveTo(pt.x, pt.y);
+                else ctxPlayer.lineTo(pt.x, pt.y);
+            });
+            ctxPlayer.stroke();
+            ctxPlayer.shadowBlur = 0;
+            
+            const pI = proj(traj[0].z, traj[0].y, 0);
+            const bRI = 11 * pI.scale;
+            const currentBall = currentMode === 'beach' ? beachBallImg : ballImg;
+            ctxPlayer.save();
+            ctxPlayer.beginPath();
+            ctxPlayer.arc(pI.x, pI.y, bRI, 0, 2 * Math.PI);
+            ctxPlayer.clip();
+            ctxPlayer.drawImage(currentBall, pI.x - bRI, pI.y - bRI, bRI * 2, bRI * 2);
+            ctxPlayer.restore();
+            
+            const pIS = proj(traj[0].z, 0, 0);
+            ctxPlayer.fillStyle = 'rgba(0,0,0,0.25)';
+            ctxPlayer.beginPath();
+            ctxPlayer.ellipse(pIS.x, pIS.y, bRI * 0.7, bRI * 0.25, 0, 0, 2 * Math.PI);
+            ctxPlayer.fill();
+            
+            if (traj.length > 1) {
+                const last = traj[traj.length - 1];
+                const pF = proj(last.z, last.y, last.x);
+                const bRF = 11 * pF.scale;
+                ctxPlayer.save();
+                ctxPlayer.beginPath();
+                ctxPlayer.arc(pF.x, pF.y, bRF, 0, 2 * Math.PI);
+                ctxPlayer.clip();
+                ctxPlayer.drawImage(currentBall, pF.x - bRF, pF.y - bRF, bRF * 2, bRF * 2);
+                ctxPlayer.restore();
+                
+                const pFS = proj(last.z, 0, last.x);
+                ctxPlayer.fillStyle = 'rgba(0,0,0,0.25)';
+                ctxPlayer.beginPath();
+                ctxPlayer.ellipse(pFS.x, pFS.y, bRF * 0.7, bRF * 0.25, 0, 0, 2 * Math.PI);
+                ctxPlayer.fill();
+            }
+        }
+        
+        function drawFieldTopView(traj, cfg) {
+            canvasTop.width = canvasTop.offsetWidth;
+            canvasTop.height = canvasTop.offsetHeight;
+            
+            const w = canvasTop.width, h = canvasTop.height, m = 50;
+            
+            ctxTop.clearRect(0, 0, w, h);
+            
+            if (currentMode === 'indoor') {
+                ctxTop.fillStyle = '#1a2332';
+            } else {
+                const bg = ctxTop.createLinearGradient(0, 0, 0, h);
+                bg.addColorStop(0, '#87CEEB');
+                bg.addColorStop(1, '#B0E0E6');
+                ctxTop.fillStyle = bg;
+            }
+            ctxTop.fillRect(0, 0, w, h);
+            
+            const fL = cfg.courtLength, fW = cfg.courtWidth;
+            let maxX = cfg.courtLength;
+            traj.forEach(p => { if (p.x > maxX) maxX = p.x; });
+            maxX = Math.max(maxX, cfg.courtLength + 2);
+            
+            const aW = w - m * 2, aH = h - m * 2;
+            const scW = aW / maxX, scH = aH / (fW + 2);
+            const sc = Math.min(scW, scH);
+            
+            const fPW = fL * sc, fPH = fW * sc;
+            const oX = m, oY = (h - fPH) / 2;
+            
+            const fzW = maxX * sc;
+            ctxTop.fillStyle = cfg.colors.freeZone;
+            ctxTop.fillRect(oX - 10, oY - 10, fzW + 20, fPH + 20);
+            
+            ctxTop.fillStyle = cfg.colors.outZone;
+            const outW = (maxX - fL) * sc;
+            ctxTop.fillRect(oX + fPW, oY - 10, outW + 20, fPH + 20);
+            
+            ctxTop.fillStyle = cfg.colors.court;
+            ctxTop.fillRect(oX, oY, fPW, fPH);
+            
+            ctxTop.strokeStyle = '#FFF';
+            ctxTop.lineWidth = 3;
+            ctxTop.strokeRect(oX, oY, fPW, fPH);
+            
+            const nX = oX + (fL / 2) * sc;
+            ctxTop.strokeStyle = '#FFF';
+            ctxTop.lineWidth = 5;
+            ctxTop.beginPath();
+            ctxTop.moveTo(nX, oY);
+            ctxTop.lineTo(nX, oY + fPH);
+            ctxTop.stroke();
+            
+            ctxTop.strokeStyle = '#FFF';
+            ctxTop.lineWidth = 2;
+            ctxTop.setLineDash([8, 8]);
+            
+            if (currentMode === 'indoor') {
+                const a1X = oX + (fL / 2 - 3) * sc;
+                ctxTop.beginPath();
+                ctxTop.moveTo(a1X, oY);
+                ctxTop.lineTo(a1X, oY + fPH);
+                ctxTop.stroke();
+                const a2X = oX + (fL / 2 + 3) * sc;
+                ctxTop.beginPath();
+                ctxTop.moveTo(a2X, oY);
+                ctxTop.lineTo(a2X, oY + fPH);
+                ctxTop.stroke();
+            }
+            
+            ctxTop.setLineDash([]);
+            
+            ctxTop.strokeStyle = 'rgba(255,255,255,0.15)';
+            ctxTop.lineWidth = 1;
+            for (let i = 2; i <= Math.ceil(maxX); i += 2) {
+                if (i !== fL / 2 - 3 && i !== fL / 2 && i !== fL / 2 + 3) {
+                    const x = oX + i * sc;
+                    ctxTop.beginPath();
+                    ctxTop.moveTo(x, oY);
+                    ctxTop.lineTo(x, oY + fPH);
+                    ctxTop.stroke();
+                }
+            }
+            
+            ctxTop.fillStyle = currentMode === 'indoor' ? '#FFF' : '#333';
+            ctxTop.font = 'bold 12px Arial';
+            ctxTop.textAlign = 'center';
+            for (let i = 0; i <= Math.ceil(maxX); i += 2) {
+                const x = oX + i * sc;
+                ctxTop.fillText(i + 'm', x, oY + fPH + 25);
+            }
+            ctxTop.textAlign = 'left';
+            
+            ctxTop.save();
+            ctxTop.translate(oX - 30, oY + fPH / 2);
+            ctxTop.rotate(-Math.PI / 2);
+            ctxTop.fillStyle = currentMode === 'indoor' ? '#FFF' : '#333';
+            ctxTop.fillText(fW + 'm', -20, 0);
+            ctxTop.restore();
+            
+            const tg = ctxTop.createLinearGradient(oX, 0, oX + maxX * sc, 0);
+            tg.addColorStop(0, '#FF4500');
+            tg.addColorStop(0.5, '#FF6347');
+            tg.addColorStop(1, '#FF8C00');
+            ctxTop.strokeStyle = tg;
+            ctxTop.lineWidth = 4;
+            ctxTop.shadowColor = 'rgba(255,69,0,0.6)';
+            ctxTop.shadowBlur = 10;
+            ctxTop.beginPath();
+            traj.forEach((p, i) => {
+                const px = oX + p.x * sc, pz = oY + fPH / 2 + p.z * sc;
+                if (i === 0) ctxTop.moveTo(px, pz);
+                else ctxTop.lineTo(px, pz);
+            });
+            ctxTop.stroke();
+            ctxTop.shadowBlur = 0;
+            
+            const iX = oX + traj[0].x * sc, iZ = oY + fPH / 2 + traj[0].z * sc, bR = 10;
+            const currentBall = currentMode === 'beach' ? beachBallImg : ballImg;
+            ctxTop.save();
+            ctxTop.beginPath();
+            ctxTop.arc(iX, iZ, bR, 0, 2 * Math.PI);
+            ctxTop.clip();
+            ctxTop.drawImage(currentBall, iX - bR, iZ - bR, bR * 2, bR * 2);
+            ctxTop.restore();
+            
+            if (traj.length > 1) {
+                const last = traj[traj.length - 1];
+                const fX = oX + last.x * sc, fZ = oY + fPH / 2 + last.z * sc;
+                ctxTop.save();
+                ctxTop.beginPath();
+                ctxTop.arc(fX, fZ, bR, 0, 2 * Math.PI);
+                ctxTop.clip();
+                ctxTop.drawImage(currentBall, fX - bR, fZ - bR, bR * 2, bR * 2);
+                ctxTop.restore();
+            }
+        }
+        
+        document.getElementById('h0').addEventListener('input', calculate);
+        document.getElementById('force').addEventListener('input', calculate);
+        document.getElementById('angle').addEventListener('input', calculate);
+        document.getElementById('windSpeed').addEventListener('input', calculate);
+        document.getElementById('windDirection').addEventListener('input', calculate);
+        
+        window.addEventListener('resize', calculate);
+        calculate();
+    </script>
+</body>
+</html>
